@@ -14,6 +14,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <optional>
 
 #ifdef _WIN32
 #  ifdef SIMPLECPP_EXPORT
@@ -351,6 +352,25 @@ namespace simplecpp {
 
     SIMPLECPP_LIB std::map<std::string, TokenList*> load(const TokenList &rawtokens, std::vector<std::string> &filenames, const DUI &dui, OutputList *outputList = nullptr);
 
+    struct SIMPLECPP_LIB MacroInfo
+    {
+        const simplecpp::Token * name;
+        bool variadic;
+        std::optional<std::vector<TokenString>> params;
+        const simplecpp::Token * begin;
+        const simplecpp::Token * end;
+    };
+
+    struct SIMPLECPP_LIB Callbacks
+    {
+        virtual ~Callbacks() = default;
+        virtual void fileEnter(const std::string& fileName, const Token * tok) {}
+        virtual void fileExit(const Token *) {}
+        virtual void directive(const Token * begin, const Token * name, const Token * end) {}
+        virtual void define(const Token *tok, const MacroInfo &macroInfo, const Token * end) {}
+        virtual void undef(const Token *tok, const Token * name, const Token * end) {}
+    };
+
     /**
      * Preprocess
      * @todo simplify interface
@@ -363,7 +383,7 @@ namespace simplecpp {
      * @param macroUsage output: macro usage
      * @param ifCond output: #if/#elif expressions
      */
-    SIMPLECPP_LIB void preprocess(TokenList &output, const TokenList &rawtokens, std::vector<std::string> &files, std::map<std::string, TokenList*> &filedata, const DUI &dui, OutputList *outputList = nullptr, std::list<MacroUsage> *macroUsage = nullptr, std::list<IfCond> *ifCond = nullptr);
+    SIMPLECPP_LIB void preprocess(TokenList &output, const TokenList &rawtokens, std::vector<std::string> &files, std::map<std::string, TokenList*> &filedata, const DUI &dui, OutputList *outputList = nullptr, std::list<MacroUsage> *macroUsage = nullptr, std::list<IfCond> *ifCond = nullptr, Callbacks * callbacks = nullptr);
 
     /**
      * Deallocate data

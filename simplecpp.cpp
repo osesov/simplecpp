@@ -1693,6 +1693,19 @@ namespace simplecpp {
                 return invalidHashHash(loc, macroName, "Combining '\\"+ tokenA->str()+ "' and '"+ strAB.substr(tokenA->str().size()) + "' yields universal character '\\" + strAB + "'. This is undefined behavior according to C standard chapter 5.1.1.2, paragraph 4.");
             }
         };
+
+        MacroInfo getMacroInfo() const
+        {
+            MacroInfo info = {
+                .name = this->nameTokDef,
+                .variadic = this->variadic,
+                .params = functionLike() ? std::make_optional(args) : std::nullopt,
+                .begin = valueDefinedInCode_ ? this->valueToken : tokenListDefine.cfront(),
+                .end = valueDefinedInCode_ ? this->endToken : tokenListDefine.cback(),
+            };
+
+            return info;
+        }
     private:
         /** Create new token where Token::macro is set for replaced tokens */
         Token *newMacroToken(const TokenString &str, const Location &loc, bool replaced, const Token *expandedFromToken=nullptr) const {
@@ -3127,6 +3140,15 @@ static const simplecpp::Token *gotoNextLine(const simplecpp::Token *tok)
     return tok;
 }
 
+static const simplecpp::Token *findEOL(const simplecpp::Token *tok)
+{
+    const unsigned int line = tok->location.line;
+    const unsigned int file = tok->location.fileIndex;
+    while (tok && tok->next && tok->next->location.line == line && tok->next->location.fileIndex == file)
+        tok = tok->next;
+    return tok;
+}
+
 #ifdef SIMPLECPP_WINDOWS
 
 class NonExistingFilesCache {
@@ -3444,7 +3466,7 @@ static std::string getTimeDefine(const struct tm *timep)
     return std::string("\"").append(buf).append("\"");
 }
 
-void simplecpp::preprocess(simplecpp::TokenList &output, const simplecpp::TokenList &rawtokens, std::vector<std::string> &files, std::map<std::string, simplecpp::TokenList *> &filedata, const simplecpp::DUI &dui, simplecpp::OutputList *outputList, std::list<simplecpp::MacroUsage> *macroUsage, std::list<simplecpp::IfCond> *ifCond)
+void simplecpp::preprocess(simplecpp::TokenList &output, const simplecpp::TokenList &rawtokens, std::vector<std::string> &files, std::map<std::string, simplecpp::TokenList *> &filedata, const simplecpp::DUI &dui, simplecpp::OutputList *outputList, std::list<simplecpp::MacroUsage> *macroUsage, std::list<simplecpp::IfCond> *ifCond, Callbacks * callbacks)
 {
 #ifdef SIMPLECPP_WINDOWS
     if (dui.clearIncludeCache)
@@ -3535,27 +3557,39 @@ void simplecpp::preprocess(simplecpp::TokenList &output, const simplecpp::TokenL
     std::set<std::string> pragmaOnce;
 
     includetokenstack.push(rawtokens.cfront());
+    if (callbacks) callbacks->fileEnter(std::string(), includetokenstack.top());
     for (std::list<std::string>::const_iterator it = dui.includes.begin(); it != dui.includes.end(); ++it) {
         const std::map<std::string, TokenList*>::const_iterator f = filedata.find(*it);
-        if (f != filedata.end())
+        if (f != filedata.end()) {
             includetokenstack.push(f->second->cfront());
+            if (callbacks) callbacks->fileEnter(*it, includetokenstack.top());
+        }
     }
 
     std::map<std::string, std::list<Location> > maybeUsedMacros;
+    bool initialToken = true;
 
     for (const Token *rawtok = nullptr; rawtok || !includetokenstack.empty();) {
         if (rawtok == nullptr) {
             rawtok = includetokenstack.top();
             includetokenstack.pop();
+            if (initialToken) { // skip first nullptr, which is the start of parsing
+                initialToken = false;
+            } else if (callbacks) {
+                callbacks->fileExit(rawtok);
+            }
             continue;
         }
 
         if (rawtok->op == '#' && !sameline(rawtok->previousSkipComments(), rawtok)) {
+            const Token * hashToken = rawtok;
             if (!sameline(rawtok, rawtok->next)) {
                 rawtok = rawtok->next;
                 continue;
             }
+
             rawtok = rawtok->next;
+            if (callbacks) callbacks->directive(hashToken, rawtok, findEOL(rawtok));
             if (!rawtok->name) {
                 rawtok = gotoNextLine(rawtok);
                 continue;
@@ -3603,6 +3637,10 @@ void simplecpp::preprocess(simplecpp::TokenList &output, const simplecpp::TokenL
                             macros.insert(std::pair<TokenString, Macro>(macro.name(), macro));
                         else
                             it->second = macro;
+
+                        if (callbacks) {
+                            callbacks->define(hashToken, macro.getMacroInfo(), findEOL(rawtok));
+                        }
                     }
                 } catch (const std::runtime_error &) {
                     if (outputList) {
@@ -3693,6 +3731,7 @@ void simplecpp::preprocess(simplecpp::TokenList &output, const simplecpp::TokenL
                     includetokenstack.push(gotoNextLine(rawtok));
                     const TokenList * const includetokens = filedata.find(header2)->second;
                     rawtok = includetokens ? includetokens->cfront() : nullptr;
+                    if (callbacks) callbacks->fileEnter(header2, rawtok);
                     continue;
                 }
             } else if (rawtok->str() == IF || rawtok->str() == IFDEF || rawtok->str() == IFNDEF || rawtok->str() == ELIF) {
@@ -3857,6 +3896,10 @@ void simplecpp::preprocess(simplecpp::TokenList &output, const simplecpp::TokenL
                         tok = tok->next;
                     if (sameline(rawtok, tok))
                         macros.erase(tok->str());
+
+                    if (callbacks) {
+                        callbacks->undef(hashToken, tok, findEOL(rawtok));
+                    }
                 }
             } else if (ifstates.top() == True && rawtok->str() == PRAGMA && rawtok->next && rawtok->next->str() == ONCE && sameline(rawtok,rawtok->next)) {
                 pragmaOnce.insert(rawtok->location.file());
