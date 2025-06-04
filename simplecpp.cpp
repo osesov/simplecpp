@@ -1696,12 +1696,16 @@ namespace simplecpp {
 
         MacroInfo getMacroInfo() const
         {
+            const bool isFunctionLike = functionLike();
             MacroInfo info = {
-                .name = this->nameTokDef,
-                .variadic = this->variadic,
-                .params = functionLike() ? std::make_optional(args) : std::nullopt,
-                .begin = valueDefinedInCode_ ? this->valueToken : tokenListDefine.cfront(),
-                .end = valueDefinedInCode_ ? this->endToken : tokenListDefine.cback(),
+                this->nameTokDef,
+                this->variadic,
+                isFunctionLike,
+                args,
+                {
+                    valueDefinedInCode_ ? this->valueToken : tokenListDefine.cfront(),
+                    valueDefinedInCode_ ? this->endToken : tokenListDefine.cback(),
+                },
             };
 
             return info;

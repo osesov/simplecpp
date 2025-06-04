@@ -14,7 +14,6 @@
 #include <set>
 #include <string>
 #include <vector>
-#include <optional>
 
 #ifdef _WIN32
 #  ifdef SIMPLECPP_EXPORT
@@ -355,20 +354,23 @@ namespace simplecpp {
     struct SIMPLECPP_LIB MacroInfo
     {
         const simplecpp::Token * name;
-        bool variadic;
-        std::optional<std::vector<TokenString>> params;
-        const simplecpp::Token * begin;
-        const simplecpp::Token * end;
+        bool isVariadic;
+        bool isFunctionLike;
+        std::vector<TokenString> params;
+        struct {
+            const simplecpp::Token * begin;
+            const simplecpp::Token * end;
+        } body;
     };
 
     struct SIMPLECPP_LIB Callbacks
     {
         virtual ~Callbacks() = default;
-        virtual void fileEnter(const std::string& fileName, const Token * tok) {}
+        virtual void fileEnter(const std::string& /*fileName*/, const Token * /*tok*/) {}
         virtual void fileExit(const Token *) {}
-        virtual void directive(const Token * begin, const Token * name, const Token * end) {}
-        virtual void define(const Token *tok, const MacroInfo &macroInfo, const Token * end) {}
-        virtual void undef(const Token *tok, const Token * name, const Token * end) {}
+        virtual void directive(const Token * /*begin*/, const Token * /*name*/, const Token * /*end*/) {}
+        virtual void define(const Token * /*tok*/, const MacroInfo & /*macroInfo*/, const Token * /*end*/) {}
+        virtual void undef(const Token * /*tok*/, const Token * /*name*/, const Token * /*end*/) {}
     };
 
     /**
