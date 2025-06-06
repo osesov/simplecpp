@@ -93,6 +93,27 @@ namespace simplecpp {
         static const std::string emptyFileName;
     };
 
+    class SIMPLECPP_LIB Range
+    {
+    public:
+        Range() = delete;
+
+        explicit Range(const std::vector<std::string> &f) : start(f), end(f) {}
+
+        Range(const Location &loc, const Location& endLoc) : start(loc), end(endLoc) {}
+
+        Range &operator=(const Range &other) {
+            if (this != &other) {
+                start = other.start;
+                end = other.end;
+            }
+            return *this;
+        }
+
+        Location start;
+        Location end;
+    };
+
     /**
      * token class.
      * @todo don't use std::string representation - for both memory and performance reasons
@@ -317,10 +338,11 @@ namespace simplecpp {
 
     /** Tracking how macros are used */
     struct SIMPLECPP_LIB MacroUsage {
-        explicit MacroUsage(const std::vector<std::string> &f, bool macroValueKnown_) : macroLocation(f), useLocation(f), macroValueKnown(macroValueKnown_) {}
+        explicit MacroUsage(const std::vector<std::string> &f, bool macroValueKnown_) : macroLocation(f), useLocation(f), useEndLocation(f), macroValueKnown(macroValueKnown_) {}
         std::string macroName;
         Location    macroLocation;
         Location    useLocation;
+        Location    useEndLocation; // location of the end of the macro usage
         bool        macroValueKnown;
     };
 
@@ -368,9 +390,13 @@ namespace simplecpp {
         virtual ~Callbacks() = default;
         virtual void fileEnter(const std::string& /*fileName*/, const Token * /*tok*/) {}
         virtual void fileExit(const Token *) {}
-        virtual void directive(const Token * /*begin*/, const Token * /*name*/, const Token * /*end*/) {}
-        virtual void define(const Token * /*tok*/, const MacroInfo & /*macroInfo*/, const Token * /*end*/) {}
-        virtual void undef(const Token * /*tok*/, const Token * /*name*/, const Token * /*end*/) {}
+        virtual void directive(const Token * /*hashToken*/, const Token * /*name*/, const Token * /*end*/) {}
+        virtual void define(const Token * /*hashToken*/, const MacroInfo & /*macroInfo*/, const Token * /*end*/) {}
+        virtual void undef(const Token * /*hashToken*/, const Token * /*name*/, const Token * /*end*/) {}
+
+        virtual void condEnter(const Token * /*hashToken*/, const Token * /*name*/, bool /*isActive*/, const Token * /*end*/) {}
+        virtual void condChange(const Token * /*hashToken*/, const Token * /*name*/, bool /*isActive*/, const Token * /*end*/) {}
+        virtual void condExit(const Token * /*hashToken*/, const Token * /*name*/, const Token * /*end*/) {}
     };
 
     /**
